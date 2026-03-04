@@ -1,7 +1,7 @@
 {
     "python-envs.pythonProjects": [
         {
-            "path": "computersfromscratch.py",
+            "path": "Computers From Scratch/functions.py",
             "envManager": "ms-python.python:venv",
             "packageManager": "ms-python.python:pip"
         }
