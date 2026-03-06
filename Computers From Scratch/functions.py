@@ -1,6 +1,7 @@
 
 from decorators import *
 
+@gatelist
 @boolchecker
 def NAND(a,b):
     if 0 in (a,b):
@@ -13,14 +14,17 @@ def NAND(a,b):
 def NOT(a):
     return NAND(a,a)
 
+@gatelist
 @boolchecker
 def AND(a,b):
     return NOT(NAND(a,b))
 
+@gatelist
 @boolchecker
 def OR(a,b):
     return NOT(AND(NOT(a),NOT(b)))
 
+@gatelist
 @boolchecker
 def XOR(a,b):
     return AND(OR(a,b),NAND(a,b)) 
@@ -59,10 +63,33 @@ def Add(a,b):
 def Add16(a,b):
     return Add(a,b)
 
-@listchecker
-@bit16
-def ALU(a,b,zx,nx,zy,ny,f,no):
-    pass
 
-a=[1,0,1]
-print(NOT(a))
+@ALUvalidation
+def ALU(x,y,zx,nx,zy,ny,f,no):
+    if zx:
+        x=0
+    if nx:
+        x=NOT(x)
+    if zy:
+        y=0
+    if ny:
+        y=NOT(y)
+    if f:
+        output=Add16(x,y)
+    else:
+        output=AND(x,y)
+    if no:
+        output=NOT(output)
+    if output==0:
+        zr=1
+    else:
+        zr=0
+    if output[0]==1:
+        ng=1
+    else:
+        ng=0
+    return output,zr,ng
+    
+
+
+
