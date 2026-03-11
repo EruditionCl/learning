@@ -1,8 +1,6 @@
 
 import math
 
-counter=0
-
 def setconstant(x,y): 
     if isinstance(y, (int, float)):
             y = Constant(y)
@@ -117,6 +115,8 @@ class Variable(Value):
         return f"{self.symbol}"
 
 x=Variable("x") # Easy to just store it here instead of typing it manually for every test
+y=Variable("y")
+z=Variable("z")
 
 class Add(Function):
     def __new__(cls,x,y):
@@ -135,10 +135,12 @@ class Add(Function):
     def __str__(self):
         left=f"{self.x}"
         right=f"{self.y}"
-        if any(isinstance(self.x,function) for function in (Divide,Power)):
+        if isinstance(self.x,Power):
             left=f"({self.x})"
-        if any(isinstance(self.y,function) for function in (Divide,Power)):
+        if isinstance(self.y,Power):
             right=f"({self.y})"
+        if isinstance(self.y,Constant) and self.y<0 or isinstance(self.y,Multiply) and self.y.x<0:
+            return f"{left}{right}"
         return f"{left}+{right}"
     
     def simplified(self):
@@ -163,49 +165,7 @@ class Add(Function):
         
     def degree(self):
         return max(self.x.degree(),self.y.degree())
-    
-class Substract(Function):
-    def __new__(cls,x,y):
-        x,y=setconstant(x,y)
-        obj = super().__new__(cls)
-        obj.x=x
-        obj.y=y
-        return obj.simplified()
 
-    def __init__(self,x,y):
-        pass
-
-    def diff(self,variable):
-        return Substract(self.x.diff(variable),self.y.diff(variable))
-    
-    def simplified(self):
-        if self.y==Constant(0):
-            return self.x
-        if self.x==self.y:
-            return Constant(0)
-        if all(isinstance(expr,Constant) for expr in (self.x,self.y)):
-            return Constant(self.x-self.y)
-        if isinstance(self.x, Substract):
-            return Substract(self.x.x,Add(self.x.y,self.y))
-        if isinstance(self.y, Substract):
-            return Substract(self.y.x,Add(self.y.y,self.x))
-        return self
-    
-    def __str__(self):
-        left=f"{self.x}"
-        right=f"{self.y}"
-        if all(isinstance(expr,(Power,Divide)) for expr in (self.x,self.y)):
-            left=f"({self.x})"
-            right=f"({self.y})"
-        if isinstance(self.x,(Power,Divide)):
-            left=f"({self.x})" 
-        if isinstance(self.y,(Power,Divide,Add,Substract)):
-            right=f"({self.y})"
-
-        return f"{left}-{right}"
-    
-    def degree(self):
-        return max(self.x.degree(),self.y.degree())
 
 class Multiply(Function):
     def __new__(cls,x,y):
@@ -254,84 +214,26 @@ class Multiply(Function):
         if isinstance(self.x,Power) and isinstance(self.y,Power):
             if self.x.x==self.y.x:
                 return Power(self.x.x, self.x.y+self.y.y)
-        if isinstance(self.x,Multiply):
-            return Multiply(self.x.x,Multiply(self.x.y,self.y))
-        if isinstance(self.y,Multiply):
-            return Multiply(self.y.x,Multiply(self.y.y,self.x))
         if isinstance(self.y,Constant) and not isinstance(self.x,Constant):
             return Multiply(self.y,self.x)
-        if any(isinstance(self.y,function) for function in (Add,Substract,Divide)):
-            if isinstance(self.x, Value):
-                return type(self.y)(Multiply(self.x,self.y.x),Multiply(self.x,self.y.y))
-            elif any(isinstance(self.x,function) for function in (Add,Substract,Divide)):
-                return Add(Add(Multiply(self.x.x,self.y.x),Multiply(self.x.x,self.y.y)),Add(Multiply(self.x.y,self.y.x),Multiply(self.x.y,self.y.y)))
-        if any(isinstance(self.x,function) for function in (Add,Substract,Divide)):
-            if isinstance(self.y, Value):
-                return type(self.x)(Multiply(self.y,self.x.x),Multiply(self.y,self.x.y))
-            elif any(isinstance(self.y,function) for function in (Add,Substract,Divide)):
-                return Add(Add(Multiply(self.x.x,self.y.x),Multiply(self.x.x,self.y.y)),Add(Multiply(self.x.y,self.y.x),Multiply(self.x.y,self.y.y)))
+        if isinstance(self.x, Add):
+            return Add(Multiply(self.x.x, self.y), Multiply(self.x.y, self.y))
+        if isinstance(self.y, Add):
+            return Add(Multiply(self.x, self.y.x), Multiply(self.x, self.y.y))
         return self
     
     def degree(self):
         return Constant(self.x.degree()) + Constant(self.y.degree())
 
+class Substract(Function):
+    def __new__(cls,x,y):
+        x,y=setconstant(x,y)
+        return Add(x,Multiply(-1,y))
+
 class Divide(Function):
     def __new__(cls,x,y):
         x,y=setconstant(x,y)
-        obj = super().__new__(cls)
-        obj.x=x
-        obj.y=y
-        return obj.simplified()
-
-    def __init__(self,x,y):
-        pass
-
-    def diff(self,variable):
-        return Divide(Substract(Multiply(self.y,self.x.diff(variable)),
-                   Multiply(self.y.diff(variable),self.x)),
-                   Multiply(self.y,self.y))
-    
-    def simplified(self):
-        if isinstance(self.y, Constant) and not isinstance(self.x, Constant):
-            return Multiply(self.y, self.x)
-        if self.y==Constant(0):
-            raise ZeroDivisionError("self.y can't be Constant(0)")
-        if self.x==Constant(0):
-            return Constant(0)
-        if self.x==Constant(1):
-            return Power(self.y,-1)
-        if self.y==Constant(1):
-            return self.x
-        if all(isinstance(expr,Constant) for expr in (self.x,self.y)):
-            return Constant(self.x/self.y)
-        if self.x==self.y:
-            return Constant(1)
-        if isinstance(self.x,Power):
-            if self.x.x==self.y:
-                return Power(self.x.x,self.x.y-Constant(1))
-        if isinstance(self.y,Power):
-            if self.y.x==self.x:
-                return Power(self.y.x,Constant(1)-self.y.y)
-        if isinstance(self.x,Power) and isinstance(self.y,Power):
-            if self.x.x==self.y.x:
-                return Power(self.x.x, self.x.y-self.y.y)
-        if isinstance(self.x,Divide):
-            return Divide(self.x.x,Multiply(self.x.y,self.y))
-        if isinstance(self.y,Divide):
-            return Divide(Multiply(self.x,self.y.y),self.y.x)        
-        return self
-    
-    def __str__(self):
-        left=f"{self.x}"
-        right=f"{self.y}"
-        if any(isinstance(self.x,function) for function in (Add,Substract,Divide,Power)):
-            left=f"({self.x})"
-        if any(isinstance(self.y,function) for function in (Add,Substract,Divide,Power)):
-            right=f"({self.y})"
-        return f"{left}/{right}"
-
-    def degree(self):
-        return max(self.x.degree(),self.y.degree())
+        return Multiply(x,Power(y,-1))
     
 class Power(Function):
     def __new__(cls,x,y):
@@ -374,6 +276,12 @@ class Power(Function):
             return self.x.degree() * self.y.value
         return 0 
         
-a=Power(x,2)
-b=Add(a,3)
-print(a.express(5))
+
+
+a=Substract(2,x)
+b=Substract(a,3)
+c=Multiply(3,b)
+print()
+d=Multiply( Substract(x, 1), Add(x, 2) )
+e=Multiply(d,x)
+print(Multiply(e,a))    
