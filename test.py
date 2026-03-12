@@ -20,18 +20,6 @@ class Function(Expression):
     def __init__(self):
         pass
 
-    def express(self,x): 
-        if isinstance(self.x,Function):
-            return self.x.express(x)
-        if isinstance(self.y,Function):
-            return self.y.express(x)
-        if isinstance(self.x,Variable):
-            return type(self)(x,self.y)
-        if isinstance(self.y,Variable):
-            return type(self)(self.x,x)
-        if isinstance(self.x,Variable) and isinstance(self.y,Variable):
-            return type(self)(x,x)
-
 class Constant(Value):
     def __init__(self,value):
         if isinstance(value,Constant):
@@ -40,6 +28,7 @@ class Constant(Value):
         if not any(isinstance(value, type) for type in (float,int)):
             raise ValueError("Constant only accepts float or int")
         self.value=value
+        self.symbolic=False
 
     def diff(self,variable):
         return Constant(0)
@@ -56,8 +45,12 @@ class Constant(Value):
     def __str__(self):
         return f"{self.value}"
     
-    def __eq__(self,other):
-        return isinstance(other,Constant) and self.value==other.value
+    def __eq__(self, other):
+        if isinstance(other, Constant):
+            return self.value == other.value
+        if isinstance(other, (int, float)):
+            return self.value == other
+        return False
     
     def __add__(self,other):
         if isinstance(other,(int,float)):
@@ -72,7 +65,9 @@ class Constant(Value):
     def __mul__(self,other):
         if isinstance(other, int) or isinstance(other,float):
             return Constant(self.value*other)
-        return Constant(self.value*other.value)
+        if isinstance(other,Constant):
+            return Constant(self.value*other.value)
+        return Multiply(self, other)
     
     def __rmul__(self,other):
         return self.__mul__(other)
@@ -96,6 +91,67 @@ class Constant(Value):
         if isinstance(other,(int,float)):
             return self.value<other
         return self.value<other.value
+
+class Symbol(Constant):
+    def __init__(self):
+        self.symbolic=True
+
+    def __eq__(self,other):
+        return isinstance(other,type(self))
+    
+    def __add__(self,other):
+        return Add(self,other)
+    
+    def __radd__(self,other):
+        return Add(other,self)
+
+    def __sub__(self,other):
+        return Substract(self,other)
+    
+    def __rsub__(self,other):
+        return Substract(other,self)
+
+    def __mul__(self,other):
+        return Multiply(self,other)
+    
+    def __rmul__(self,other):
+        return Multiply(other,self)
+    
+    def __truediv__(self,other):
+        return Divide(self,other)
+    
+    def __rtruediv__(self,other):
+        return Divide(other,self)
+    
+    def __pow__(self,other):
+        return Power(self,other)
+    
+    def __gt__(self,other):
+        if isinstance(other,(int,float)):
+            return self.value>other
+        return self.value>other.value
+    
+    def __lt__(self,other):
+        if isinstance(other,(int,float)):
+            return self.value<other
+        return self.value<other.value
+    
+class Pi(Symbol):
+    def __init__(self):
+        self.value=3.14159265358979
+        super().__init__()
+    
+    def __str__(self):
+        return "π"
+    
+    
+class Euler(Symbol):
+    def __init__(self):
+        self.value=2.718281828459045
+        super().__init__()
+    
+    def __str__(self):
+        return "e"
     
     
 class Variable(Value):
@@ -110,6 +166,9 @@ class Variable(Value):
 
     def degree(self):
         return 1
+
+    def express(self, x):
+        return Constant(x)
         
     def __str__(self):
         return f"{self.symbol}"
@@ -117,6 +176,7 @@ class Variable(Value):
 x=Variable("x") # Easy to just store it here instead of typing it manually for every test
 y=Variable("y")
 z=Variable("z")
+valuetypes = (int, float)
 
 class Add(Function):
     def __new__(cls,x,y):
@@ -128,7 +188,7 @@ class Add(Function):
 
     def __init__(self,x,y):
         pass
-
+        
     def diff(self,variable):
         return Add(self.x.diff(variable),self.y.diff(variable))
     
@@ -148,7 +208,8 @@ class Add(Function):
         if self.y == Constant(0): return self.x
         if self.x==self.y: return Multiply(2,self.x)
         if all(isinstance(expr,Constant) for expr in (self.x,self.y)): 
-            return Constant(self.x+self.y)
+            if self.x.symbolic==False and self.y.symbolic==False:
+                return Constant(self.x+self.y)
         if isinstance(self.x, Constant) and not isinstance(self.y, Constant):
             return Add(self.y, self.x)
         if isinstance(self.x, Add):
@@ -164,7 +225,10 @@ class Add(Function):
 
         
     def degree(self):
-        return max(self.x.degree(),self.y.degree())
+        return max(self.x,self.y)
+    
+    def express(self,x):
+        return self.x.express(x)+self.y.express(x)
 
 
 class Multiply(Function):
@@ -176,7 +240,7 @@ class Multiply(Function):
         return obj.simplified()
 
     def __init__(self,x,y):
-        pass
+        pass   
 
     def diff(self,variable):
         return Add(Multiply(self.x,self.y.diff(variable)),
@@ -202,7 +266,8 @@ class Multiply(Function):
         elif self.y==Constant(1):
             return self.x
         if all(isinstance(expr,Constant) for expr in (self.x,self.y)):
-            return Constant(self.x*self.y)
+            if self.x.symbolic==False and self.y.symbolic==False:
+                return Constant(self.x*self.y)
         if self.x==self.y:
             return Power(self.x,2)
         if isinstance(self.x,Power):
@@ -224,6 +289,9 @@ class Multiply(Function):
     
     def degree(self):
         return Constant(self.x.degree()) + Constant(self.y.degree())
+    
+    def express(self,x):
+        return self.x.express(x)*self.y.express(x)
 
 class Substract(Function):
     def __new__(cls,x,y):
@@ -248,15 +316,14 @@ class Power(Function):
 
     def simplified(self):
         if all(isinstance(value,Constant) for value in (self.x,self.y)):
-            return pow(self.x,self.y)
+            if self.x.symbolic==False and self.y.symbolic==False:
+                return pow(self.x,self.y)
         if self.y==Constant(0):
             return Constant(1)
         if self.y==Constant(1):
             return self.x
         if isinstance(self.x,Power):
             return Power(self.x.x,self.x.y*self.y)
-        if isinstance(self.x,Constant) and not isinstance(self.y,Constant):
-            return Power(self.y,self.x)
         return self
     
     def diff(self,variable):
@@ -276,12 +343,22 @@ class Power(Function):
             return self.x.degree() * self.y.value
         return 0 
         
+    def express(self,x):
+        return pow(self.x.express(x),self.y.express(x))
+    
+class Sin(Function):
+    def __init__(self,angle):
+        self.angle=angle
 
+    def simplified(self):
+        if isinstance(self.angle,Multiply):
+            def is_integer_constant(val):
+                return isinstance(val, Constant) and isinstance(val.value, int)
+            if is_integer_constant(self.x.angle) and isinstance(self.y.angle,Pi):
+                return Constant(0)
+            if is_integer_constant(self.y.angle) and isinstance(self.x.angle,Pi):
+                return Constant(0)
+    
 
-a=Substract(2,x)
-b=Substract(a,3)
-c=Multiply(3,b)
-print()
-d=Multiply( Substract(x, 1), Add(x, 2) )
-e=Multiply(d,x)
-print(Multiply(e,a))    
+pi=Multiply(1,Pi())
+print(Sin(pi).simplified())
