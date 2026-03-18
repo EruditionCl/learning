@@ -1,23 +1,61 @@
 
 import math as math
 
-def setconstant(x,y): 
-    if isinstance(y, (int, float)):y = Constant(y)
-    if isinstance(x, (int, float)):x = Constant(x)
-    return x,y
+def setconstant(*args): #Takes ints or floats and converts them to Constant()
+    result = []
+    for arg in args:
+        if isinstance(arg, (int, float)):
+            result.append(Constant(arg))
+        else:
+            result.append(arg)
+    return tuple(result)
 
-def s(): #delete later
-    print("works")
+class Expression: # Parent Class
+    def __init__(self):
+        pass
+    
+    def __add__(self,other):
+        return Add(self,other)
+    
+    def __radd__(self,other):
+        return Add(other,self)
 
-class Expression: 
+    def __sub__(self,other):
+        return Substract(self,other)
+    
+    def __rsub__(self,other):
+        return Substract(other,self)
+
+    def __mul__(self,other):
+        return Multiply(self,other)
+    
+    def __rmul__(self,other):
+        return Multiply(other,self)
+    
+    def __truediv__(self,other):
+        return Divide(self,other)
+    
+    def __rtruediv__(self,other):
+        return Divide(other,self)
+    
+    def __pow__(self,other):
+        return Power(self,other)
+
+    def __rpow__(self,other):
+        return Power(other,self)
+    
+    def __neg__(self):
+        return Multiply(-1,self)
+
+    def __pos__(self):
+        return self
+
+
+class Value(Expression): # Variables and Constants
     def __init__(self):
         pass
 
-class Value(Expression): 
-    def __init__(self):
-        pass
-
-class Function(Expression):
+class Function(Expression): # Functions
     def __init__(self):
         pass
 
@@ -29,18 +67,18 @@ class Constant(Value):
         if not any(isinstance(value, type) for type in (float,int)):
             raise ValueError("Constant only accepts float or int")
         self.value=value
-        self.symbolic=False
+        self.symbolic=False 
 
-    def diff(self,variable):
+    def diff(self,variable): #Differentiating a constant returns 0
         return Constant(0)
     
     def simplified(self):
         return self
     
-    def express(self, x, var):
+    def express(self, x, var): #If f(x) = 3, if x=0 then f(x) is still 3
         return self
     
-    def degree(self,var):
+    def degree(self,var): #Degree of a constant is 0
         return 0
     
     def has_variable(self,var):
@@ -49,7 +87,7 @@ class Constant(Value):
     def __str__(self):
         return f"{self.value}"
     
-    def __eq__(self, other):
+    def __eq__(self, other): #The following magic methods accounts for int & floats being accepted
         if isinstance(other, Constant):
             return self.value == other.value
         if isinstance(other, (int, float)):
@@ -144,6 +182,9 @@ class Symbol(Constant):
     
     def __pow__(self,other):
         return Power(self,other)
+
+    def __rpow__(self,other):
+        return Power(other,self)
     
     
 class Pi(Symbol):
@@ -153,8 +194,7 @@ class Pi(Symbol):
     
     def __str__(self):
         return "π"
-    
-    
+
 class Euler(Symbol):
     def __init__(self):
         self.value=math.e
@@ -163,7 +203,10 @@ class Euler(Symbol):
     def __str__(self):
         return "e"
     
-    
+e=Euler()
+pi=Pi()
+π=Pi()    
+
 class Variable(Value):
     def __init__(self,symbol):
         self.symbol=symbol
@@ -180,7 +223,7 @@ class Variable(Value):
         return 0
 
     def express(self, x, var):
-        if var==self.symbol:
+        if var==self:
             return Constant(x)
         return self
     
@@ -193,14 +236,13 @@ class Variable(Value):
 x=Variable("x") # Easy to just store it here instead of typing it manually for every test
 y=Variable("y")
 z=Variable("z")
-valuetypes = (Constant,int, float)
+valuetypes = (Constant,int,float)
 
 class Add(Function):
     def __new__(cls,x,y):
         x,y=setconstant(x,y)
         obj = super().__new__(cls)
-        obj.x=x
-        obj.y=y
+        obj.x,obj.y=x,y
         return obj.simplified()
 
     def __init__(self,x,y):
@@ -212,10 +254,8 @@ class Add(Function):
     def __str__(self):
         left=f"{self.x}"
         right=f"{self.y}"
-        if isinstance(self.x,Power):
-            left=f"({self.x})"
-        if isinstance(self.y,Power):
-            right=f"({self.y})"
+        if isinstance(self.x,Power):left=f"({self.x})"
+        if isinstance(self.y,Power):right=f"({self.y})"
         return f"{left}+{right}"
     
     def simplified(self):
@@ -236,6 +276,16 @@ class Add(Function):
             if isinstance(self.y.x, Multiply): 
                 if self.x.y == self.y.x.y:
                     return Add(Multiply(Add(self.x.x, self.y.x.x),self.x.y), self.y.y)
+                
+        if isinstance(self.x,Power) and isinstance(self.x.x,Sin) and self.x.y==2:
+            if isinstance(self.y,Power) and isinstance(self.y.x,Cos) and self.y.y==2:
+                if self.x.x.arg==self.y.x.arg:
+                    return Constant(1)
+            
+        if isinstance(self.y,Power) and isinstance(self.y.x,Sin) and self.y.y==2:
+            if isinstance(self.x,Power) and isinstance(self.x.x,Cos) and self.x.y==2:
+                if self.x.x.arg==self.y.x.arg:
+                    return Constant(1)
         return self
 
         
@@ -347,7 +397,6 @@ class Power(Function):
     def diff(self,variable):        
             return Multiply(self.x.diff(variable),Multiply(self.y, Power(self.x,self.y-1)))
 
-    
     def __str__(self):
         if isinstance(self.x,Function) and isinstance(self.y,Function):   
             return f"({self.x}) ^ ({self.y})"    
@@ -368,7 +417,7 @@ class Power(Function):
     def has_variable(self,var):
         return self.x.has_variable(var) or self.y.has_variable(var)
     
-class Trigonometry(Function):
+class Unary(Function):
 
     evaluate=False
 
@@ -376,148 +425,139 @@ class Trigonometry(Function):
     def evaluatefunc(cls,input):
         cls.evaluate=input
 
-    def __new__(cls,angle):
-        if isinstance(angle, (int, float)): angle = Constant(angle)
-        obj = super().__new__(cls)
-        obj.angle=angle
-        return obj.simplified()
-
-    def __init__(self,angle):
-        pass
-    
-    def has_variable(self,var):
-        return self.angle.has_variable(var)
-    
-    def degree(self,var):
-        if self.angle.has_variable(var):
-            return None
-        return 0
-    
-    def express(self,x,var):
-        return type(self)((self.angle.express(x,var)))
-
-class Sin(Trigonometry):
-    def simplified(self):
-        if isinstance(self.angle,Pi) or self.angle==0:
-                return Constant(0)
-        if isinstance(self.angle,Multiply):
-            if self.angle.x==-1:
-                return Multiply(-1,Sin(self.angle.y))
-            elif self.angle.y==-1:
-                return Multiply(-1,Sin(self.angle.x))
-            if any(isinstance(value,Pi) for value in (self.angle.x,self.angle.y)):
-                if isinstance(self.angle.x,Pi) and isinstance(self.angle.y,Constant):
-                    self.angle.x,self.angle.y=self.angle.y,self.angle.x                 
-                self.angle.x=self.angle.x%2
-                self.angle.x=round(self.angle.x,10)
-
-                if self.angle.x in (0,1):
-                    return Constant(0)
-                if self.angle.x==0.5:
-                    return Constant(1)
-                if self.angle.x==1.5:
-                    return Constant(-1)
-                
-        if Sin.evaluate==True:
-            if isinstance(self.angle,Constant):
-                return math.sin(self.angle.value)
-            if isinstance(self.angle,Multiply):
-                if isinstance(self.angle.x,Pi) and isinstance(self.angle.y,Constant):
-                    return math.sin(math.pi*self.angle.y)
-                if isinstance(self.angle.y,Pi) and isinstance(self.angle.x,Constant):
-                    return math.sin(math.pi*self.angle.x)
-        return self
-    
-    def __str__(self):
-        return f"sin({self.angle})"
-    
-    def diff(self,variable):
-        return Multiply(Cos(self.angle), self.angle.diff(variable))
-    
-class Cos(Trigonometry):
-    def simplified(self):
-        if isinstance(self.angle,Pi):
-            return Constant(-1)
-        if self.angle==0:
-            return Constant(1)
-        if isinstance(self.angle,Multiply):
-            if self.angle.x==-1:
-                return Cos(self.angle.y)
-            elif self.angle.y==-1:
-                return Cos(self.angle.x)
-            if any(isinstance(value,Pi) for value in (self.angle.x,self.angle.y)):
-                if isinstance(self.angle.x,Pi) and isinstance(self.angle.y,Constant):
-                    self.angle.x,self.angle.y=self.angle.y,self.angle.x                 
-                self.angle.x=self.angle.x%2
-                self.angle.x=round(self.angle.x,10)
-
-                if self.angle.x in(0.5,1.5):
-                    return Constant(0)
-                if self.angle.x==0:
-                    return Constant(1)
-                if self.angle.x==1:
-                    return Constant(-1)
-                
-        if Cos.evaluate==True:
-            if isinstance(self.angle,Constant):
-                return math.cos(self.angle.value)
-            if isinstance(self.angle,Multiply):
-                if isinstance(self.angle.y,Pi) and isinstance(self.angle.x,valuetypes):
-                    return math.cos(math.pi*self.angle.x)
-        return self
-    
-    def __str__(self):
-        return f"cos({self.angle})"
-    
-    def diff(self,variable):
-        return Multiply(self.angle.diff(variable),Multiply(Sin(self.angle), -1))
-
-class Tan(Trigonometry):
-    def simplified(self):
-        if self.angle==0 or isinstance(self.angle,Pi):
-            return Constant(0)
-        if isinstance(self.angle,Multiply):
-            if self.angle.x==-1:
-                return Multiply(-1,Tan(self.angle.y))
-            elif self.angle.y==-1:
-                return Multiply(-1,Tan(self.angle.x))
-            if any(isinstance(value,Pi) for value in (self.angle.x,self.angle.y)):
-                if isinstance(self.angle.x,Pi) and isinstance(self.angle.y,Constant):
-                    self.angle.x,self.angle.y=self.angle.y,self.angle.x                 
-                self.angle.x=self.angle.x%1
-                self.angle.x=round(self.angle.x,10)
-
-                if self.angle.x==0:
-                    return Constant(0)
-                if self.angle.x==0.5:
-                    return ZeroDivisionError("Tan(0.5π) is undefined")
-                if self.angle.x==0.25:
-                    return Constant(1)
-                
-        if Tan.evaluate==True:
-            original = [Sin.evaluate,Cos.evaluate]
-            Sin.evaluate,Cos.evaluate=True,True
-            output=Divide(Sin(self.angle),Cos(self.angle))
-            Sin.evaluate,Cos.evaluate=original
-            return output
-        return self
-
-    def __str__(self):
-        return f"tan({self.angle})"
-    
-    def diff(self,variable):
-        return Multiply(self.angle.diff(variable),Divide(1,Power(Cos(self.angle),2)))
-
-class Ln(Function):
     def __new__(cls,arg):
-        if isinstance(arg, (int, float)): arg = Constant(arg)
+        arg,=setconstant(arg)
         obj = super().__new__(cls)
         obj.arg=arg
         return obj.simplified()
 
     def __init__(self,arg):
         pass
+    
+    def has_variable(self,var):
+        return self.arg.has_variable(var)
+    
+    def degree(self,var):
+        if self.arg.has_variable(var):
+            return None
+        return 0
+    
+    def express(self,x,var):
+        return type(self)((self.arg.express(x,var)))
 
+class Sin(Unary):
+    def simplified(self):
+        if isinstance(self.arg,Pi) or self.arg==0:
+                return Constant(0)
+        if isinstance(self.arg,Multiply):
+            if self.arg.x==-1:
+                return Multiply(-1,Sin(self.arg.y))
+            elif self.arg.y==-1:
+                return Multiply(-1,Sin(self.arg.x))
+            if any(isinstance(value,Pi) for value in (self.arg.x,self.arg.y)):
+                if isinstance(self.arg.x,Pi) and isinstance(self.arg.y,Constant):
+                    self.arg.x,self.arg.y=self.arg.y,self.arg.x                 
+                self.arg.x=self.arg.x%2
+                self.arg.x=round(self.arg.x,10)
+
+                if self.arg.x in (0,1):
+                    return Constant(0)
+                if self.arg.x==0.5:
+                    return Constant(1)
+                if self.arg.x==1.5:
+                    return Constant(-1)
+                
+        if Sin.evaluate==True:
+            if isinstance(self.arg,Constant):
+                return math.sin(self.arg.value)
+            if isinstance(self.arg,Multiply):
+                if isinstance(self.arg.x,Pi) and isinstance(self.arg.y,Constant):
+                    return math.sin(math.pi*self.arg.y)
+                if isinstance(self.arg.y,Pi) and isinstance(self.arg.x,Constant):
+                    return math.sin(math.pi*self.arg.x)
+        return self
+    
+    def __str__(self):
+        return f"sin({self.arg})"
+    
+    def diff(self,variable):
+        return Multiply(Cos(self.arg), self.arg.diff(variable))
+    
+class Cos(Unary):
+    def simplified(self):
+        if isinstance(self.arg,Pi):
+            return Constant(-1)
+        if self.arg==0:
+            return Constant(1)
+        if isinstance(self.arg,Multiply):
+            if self.arg.x==-1:
+                return Cos(self.arg.y)
+            elif self.arg.y==-1:
+                return Cos(self.arg.x)
+            if any(isinstance(value,Pi) for value in (self.arg.x,self.arg.y)):
+                if isinstance(self.arg.x,Pi) and isinstance(self.arg.y,Constant):
+                    self.arg.x,self.arg.y=self.arg.y,self.arg.x                 
+                self.arg.x=self.arg.x%2
+                self.arg.x=round(self.arg.x,10)
+
+                if self.arg.x in(0.5,1.5):
+                    return Constant(0)
+                if self.arg.x==0:
+                    return Constant(1)
+                if self.arg.x==1:
+                    return Constant(-1)
+                
+        if Cos.evaluate==True:
+            if isinstance(self.arg,Constant):
+                return math.cos(self.arg.value)
+            if isinstance(self.arg,Multiply):
+                if isinstance(self.arg.y,Pi) and isinstance(self.arg.x,valuetypes):
+                    return math.cos(math.pi*self.arg.x)
+        return self
+    
+    def __str__(self):
+        return f"cos({self.arg})"
+    
+    def diff(self,variable):
+        return Multiply(self.arg.diff(variable),Multiply(Sin(self.arg), -1))
+
+class Tan(Unary):
+    def simplified(self):
+        if self.arg==0 or isinstance(self.arg,Pi):
+            return Constant(0)
+        if isinstance(self.arg,Multiply):
+            if self.arg.x==-1:
+                return Multiply(-1,Tan(self.arg.y))
+            elif self.arg.y==-1:
+                return Multiply(-1,Tan(self.arg.x))
+            if any(isinstance(value,Pi) for value in (self.arg.x,self.arg.y)):
+                if isinstance(self.arg.x,Pi) and isinstance(self.arg.y,Constant):
+                    self.arg.x,self.arg.y=self.arg.y,self.arg.x                 
+                self.arg.x=self.arg.x%1
+                self.arg.x=round(self.arg.x,10)
+
+                if self.arg.x==0:
+                    return Constant(0)
+                if self.arg.x==0.5:
+                    return ZeroDivisionError("Tan(0.5π) is undefined")
+                if self.arg.x==0.25:
+                    return Constant(1)
+                
+        if Tan.evaluate==True:
+            original = [Sin.evaluate,Cos.evaluate]
+            Sin.evaluate,Cos.evaluate=True,True
+            output=Divide(Sin(self.arg),Cos(self.arg))
+            Sin.evaluate,Cos.evaluate=original
+            return output
+        return self
+
+    def __str__(self):
+        return f"tan({self.arg})"
+    
+    def diff(self,variable):
+        return Multiply(self.arg.diff(variable),Divide(1,Power(Cos(self.arg),2)))
+
+class Ln(Unary):
     def simplified(self):
         if self.arg==1:
             return Constant(0)
@@ -527,9 +567,41 @@ class Ln(Function):
             return Add(Ln(self.arg.x),Ln(self.arg.y))
         if isinstance(self.arg,Power):
             return Multiply(self.arg.y,Ln(self.arg.x))
+        if isinstance(self.arg, Exp):
+            return self.arg.arg
+        
+        if Ln.evaluate==True:
+            if isinstance(self.arg,Constant):
+                return math.log(self.arg.value)
         return self
+    
+    def diff(self,variable):
+        return Divide(self.arg.diff(variable),self.arg)
     
     def __str__(self):
         return f"ln({self.arg})"
 
-print(Ln(Divide(x,y)))
+class Exp(Unary):
+    def simplified(self):
+        if self.arg==0:
+            return Constant(1)
+        if self.arg==1:
+            return Euler()
+        if isinstance(self.arg,Ln):
+            return self.arg.arg
+        return self
+    
+    def diff(self,variable):
+        return Multiply(self, self.arg.diff(variable))
+
+    def __str__(self):
+        return f"e ^ {self.arg}"
+    
+
+def taylor(func,a=0,n=7):
+    final=0
+    for i in range(n):
+        final = Add(final, Divide(Multiply(func.express(a,x),Power(Substract(x,a),i)),math.factorial(i)))
+        func=func.diff(x)
+    return final
+
