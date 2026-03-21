@@ -1,5 +1,7 @@
 
 import math as math
+import time as time
+
 
 def setconstant(*args): # Takes ints or floats and converts them to Constant()
     result = []
@@ -9,6 +11,19 @@ def setconstant(*args): # Takes ints or floats and converts them to Constant()
         else:
             result.append(arg)
     return tuple(result)
+
+def factorial(input):
+    if not isinstance(input,int):
+        raise TypeError("input in factorial() must be a int")
+    elif input<0:
+        raise ValueError("input in factorial() must be greater than zero")
+    elif input==0:
+        return 1
+    else:
+        final=1
+        for i in range(input):
+            final*=(i+1)
+        return final
 
 class Expression: # Parent Class
     def __init__(self):
@@ -61,7 +76,7 @@ class Expression: # Parent Class
             func=self.orderdiff(variable,i)
             funcexpress=func.express(a,variable)
             polynomial=(variable-a)**i
-            final=(funcexpress*polynomial)/math.factorial(i)+final
+            final=(funcexpress*polynomial)/factorial(i)+final
         return final
 
 class Identifier(Expression):
@@ -168,6 +183,9 @@ class Constant(Value):
         if isinstance(other,Constant):
             return Constant(self.value**other.value)
         return Power(self.value,other)
+    
+    def __round__(self, ndigits=10):
+        return round(self.value,ndigits)
 
 class Symbol(Value):
     def __init__(self):
@@ -176,21 +194,23 @@ class Symbol(Value):
     def __eq__(self,other):
         return isinstance(other,type(self))
 
+class Euler(Symbol):
+    def __init__(self):
+        self.value=2.718281828459045
+        super().__init__()
+    
+    def __str__(self):
+        return "e"
+
 class Pi(Symbol):
     def __init__(self):
-        self.value=math.pi
+        self.value=3.1415926358979
         super().__init__()
     
     def __str__(self):
         return "π"
 
-class Euler(Symbol):
-    def __init__(self):
-        self.value=math.e
-        super().__init__()
-    
-    def __str__(self):
-        return "e"    
+
 
 class Variable(Identifier):
     def __init__(self,symbol):
@@ -446,12 +466,12 @@ class Sin(Unary):
                 
         if Sin.evaluate==True:
             if isinstance(self.arg,valuetypes):
-                return math.sin(self.arg.value)
+                return Sin(x).taylor(x,20).express(self.arg.value,x)
             if isinstance(self.arg,Multiply):
                 if self.arg.x==π and isinstance(self.arg.y,valuetypes):
-                    return math.sin(math.pi*self.arg.y)
+                    return Sin(x).taylor(x,20).express(pi.value*self.arg.y,x)
                 if self.arg.y==π and isinstance(self.arg.x,valuetypes):
-                    return math.sin(math.pi*self.arg.x)
+                    return Sin(x).taylor(x,20).express(pi.value*self.arg.x,x)
         return self
     
     def __str__(self):
@@ -486,10 +506,10 @@ class Cos(Unary):
                 
         if Cos.evaluate==True:
             if isinstance(self.arg,Constant):
-                return math.cos(self.arg.value)
+                return Cos(x).taylor(x,20).express(self.arg.value,x)
             if isinstance(self.arg,Multiply):
                 if self.arg.y==π and isinstance(self.arg.x,valuetypes):
-                    return math.cos(math.pi*self.arg.x)
+                    return Cos(x).taylor(x,20).express(pi.value*self.arg.x,x)
         return self
     
     def __str__(self):
@@ -609,9 +629,3 @@ class Exp(Binary):
             return f"{self.x} ^ ({self.y})"
         return f"{self.x} ^ {self.y}"
 
-
-
-
-a=NaturalExp(x)
-b=a.taylor(x,100,0)
-print(b.express(1,x))
